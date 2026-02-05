@@ -65,6 +65,7 @@ jobs:
         fi
     
     - name: Publish self-contained executable
+      shell: bash
       run: |
         dotnet publish BTAzureTools.Console/BTAzureTools.Console.csproj \
           --configuration Release \
@@ -82,6 +83,7 @@ jobs:
     
     - name: Rename artifact (Windows)
       if: runner.os == 'Windows'
+      shell: bash
       run: mv ./publish/bt-azure-tools.exe ./publish/${{ matrix.artifact_name }}
     
     - name: Create tarball (Unix)
