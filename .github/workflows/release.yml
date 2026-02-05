@@ -157,9 +157,10 @@ jobs:
   update-homebrew:
     needs: release
     runs-on: ubuntu-latest
-    # Only run if we have a homebrew tap repository set up
+    # Only run if we have a homebrew tap repository set up AND the repo is public
+    # For private repos, Homebrew cannot download the release binaries
     # You'll need to create a repository named 'homebrew-tap' and add HOMEBREW_TAP_TOKEN secret
-    if: vars.HOMEBREW_TAP_REPO != ''
+    if: vars.HOMEBREW_TAP_REPO != '' && !github.event.repository.private
     
     steps:
     - name: Get version

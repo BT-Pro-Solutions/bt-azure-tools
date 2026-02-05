@@ -4,6 +4,7 @@ using BTAzureTools.Infrastructure.AzureInfra;
 using BTAzureTools.Infrastructure.Graph;
 using BTAzureTools.Infrastructure.Sql;
 using BTAzureTools.Tools.SqlEntraPermissions;
+using BTAzureTools.Tools.SqlFirewall;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
 
@@ -35,12 +36,14 @@ services.AddTransient<ToolMenu>();
 
 // Register tools
 services.AddTransient<SqlEntraPermissionsTool>();
+services.AddTransient<SqlFirewallTool>();
 
 var serviceProvider = services.BuildServiceProvider();
 
 // Register tools with the registry
 var toolRegistry = serviceProvider.GetRequiredService<IToolRegistry>();
 toolRegistry.Register<SqlEntraPermissionsTool>();
+toolRegistry.Register<SqlFirewallTool>();
 
 // Run the tool menu
 var console = AnsiConsole.Console;

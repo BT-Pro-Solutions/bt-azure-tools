@@ -14,6 +14,7 @@ public sealed class SqlEntraPermissionsTool : ITool
     private readonly ISqlAdminService _sqlAdminService;
     private readonly ISqlPermissionService _permissionService;
     private readonly ISqlFirewallService _firewallService;
+    private readonly ICredentialProvider _credentialProvider;
     
     public ToolDescriptor Descriptor => new(
         "SQL Entra Permissions",
@@ -24,12 +25,14 @@ public sealed class SqlEntraPermissionsTool : ITool
         AzurePrompter prompter,
         ISqlAdminService sqlAdminService,
         ISqlPermissionService permissionService,
-        ISqlFirewallService firewallService)
+        ISqlFirewallService firewallService,
+        ICredentialProvider credentialProvider)
     {
         _prompter = prompter;
         _sqlAdminService = sqlAdminService;
         _permissionService = permissionService;
         _firewallService = firewallService;
+        _credentialProvider = credentialProvider;
     }
     
     public async Task<int> ExecuteAsync(ToolExecutionContext context)
@@ -70,7 +73,13 @@ public sealed class SqlEntraPermissionsTool : ITool
             
             if (console.Confirm("Add a temporary firewall rule for your IP?", true))
             {
-                var ruleName = $"BTAzureTools-{Environment.MachineName}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+                var currentUser = await console.Status()
+                    .Spinner(Spinner.Known.Dots)
+                    .StartAsync("Getting current user info...", async ctx =>
+                        await _credentialProvider.GetCurrentUserAsync(ct));
+                
+                var userNamePart = ExtractUserNameFromEmail(currentUser.UserPrincipalName);
+                var ruleName = $"DevAccess-{userNamePart}-{SanitizeName(Environment.MachineName)}-{DateTime.UtcNow:yyyyMMddHHmmss}";
                 
                 await console.Status()
                     .Spinner(Spinner.Known.Dots)
@@ -384,5 +393,35 @@ public sealed class SqlEntraPermissionsTool : ITool
         }
         
         console.Write(finalTable);
+    }
+    
+    /// <summary>
+    /// Extracts the username part from an email address (the part before @).
+    /// </summary>
+    private static string ExtractUserNameFromEmail(string? email)
+    {
+        if (string.IsNullOrEmpty(email))
+            return "Unknown";
+        
+        var atIndex = email.IndexOf('@');
+        var userName = atIndex > 0 ? email[..atIndex] : email;
+        
+        return SanitizeName(userName);
+    }
+    
+    /// <summary>
+    /// Sanitizes a name to be safe for use in a firewall rule name.
+    /// Azure firewall rule names can contain letters, numbers, underscores, periods, and hyphens.
+    /// </summary>
+    private static string SanitizeName(string name)
+    {
+        var sanitized = new string(name
+            .Where(c => char.IsLetterOrDigit(c) || c == '_' || c == '.' || c == '-')
+            .ToArray());
+        
+        if (string.IsNullOrEmpty(sanitized))
+            return "Unknown";
+        
+        return sanitized.Length > 20 ? sanitized[..20] : sanitized;
     }
 }
