@@ -78,11 +78,11 @@ jobs:
     
     - name: Rename artifact (Unix)
       if: runner.os != 'Windows'
-      run: mv ./publish/BTAzureTools.Console ./publish/${{ matrix.artifact_name }}
+      run: mv ./publish/bt-azure-tools ./publish/${{ matrix.artifact_name }}
     
     - name: Rename artifact (Windows)
       if: runner.os == 'Windows'
-      run: mv ./publish/BTAzureTools.Console.exe ./publish/${{ matrix.artifact_name }}
+      run: mv ./publish/bt-azure-tools.exe ./publish/${{ matrix.artifact_name }}
     
     - name: Create tarball (Unix)
       if: runner.os != 'Windows'
