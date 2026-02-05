@@ -1,0 +1,51 @@
+```mermaid
+flowchart LR
+  subgraph Host[Console Host]
+    CLI[Spectre.Console CLI
+(command routing + prompts)]
+    Registry[Tool Registry
+(discovery)]
+    Runner[Tool Runner]
+  end
+
+  subgraph Core[Core]
+    Domain[Domain Models
+(selection + permission profiles)]
+    AppSvc[Application Services
+(workflows)]
+    Contracts[Interfaces
+(ports)]
+  end
+
+  subgraph Infra[Infrastructure]
+    Auth[Azure.Identity
+(TokenCredential)]
+    ARM[Azure.ResourceManager.*
+(ARM clients)]
+    Graph[Microsoft.Graph
+(principal lookup)]
+    Sql[Microsoft.Data.SqlClient
+(T-SQL execution)]
+  end
+
+  subgraph Tools[Tools]
+    SqlTool[SQL Entra Permissions Tool]
+    Future[Future tools...]
+  end
+
+  CLI --> Registry --> Runner
+  Runner --> AppSvc
+  SqlTool --> AppSvc
+  Future --> AppSvc
+
+  AppSvc --> Contracts
+  Contracts --> ARM
+  Contracts --> Graph
+  Contracts --> Sql
+  ARM --> Auth
+  Graph --> Auth
+  Sql --> Auth
+
+  Domain --- AppSvc
+  Domain --- Contracts
+```

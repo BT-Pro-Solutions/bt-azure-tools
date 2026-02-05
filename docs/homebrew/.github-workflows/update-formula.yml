@@ -1,0 +1,67 @@
+# This workflow goes in your homebrew-tap repository under .github/workflows/
+# It automatically updates the formula when triggered by a new BTAzureTools release
+
+name: Update Formula
+
+on:
+  repository_dispatch:
+    types: [update-formula]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 1.0.0)'
+        required: true
+      arm64_sha256:
+        description: 'SHA256 for osx-arm64 tarball'
+        required: true
+      x64_sha256:
+        description: 'SHA256 for osx-x64 tarball'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  update-formula:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Get inputs
+      id: inputs
+      run: |
+        if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+          echo "version=${{ github.event.client_payload.version }}" >> $GITHUB_OUTPUT
+          echo "arm64_sha=${{ github.event.client_payload.arm64_sha256 }}" >> $GITHUB_OUTPUT
+          echo "x64_sha=${{ github.event.client_payload.x64_sha256 }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          echo "arm64_sha=${{ inputs.arm64_sha256 }}" >> $GITHUB_OUTPUT
+          echo "x64_sha=${{ inputs.x64_sha256 }}" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Update formula
+      run: |
+        VERSION="${{ steps.inputs.outputs.version }}"
+        ARM64_SHA="${{ steps.inputs.outputs.arm64_sha }}"
+        X64_SHA="${{ steps.inputs.outputs.x64_sha }}"
+        
+        # Update version
+        sed -i "s/version \".*\"/version \"${VERSION}\"/" Formula/bt-azure-tools.rb
+        
+        # Update ARM64 SHA256 (line after on_arm do)
+        sed -i "/on_arm do/{n;n;s/sha256 \".*\"/sha256 \"${ARM64_SHA}\"/}" Formula/bt-azure-tools.rb
+        
+        # Update x64 SHA256 (line after on_intel do)
+        sed -i "/on_intel do/{n;n;s/sha256 \".*\"/sha256 \"${X64_SHA}\"/}" Formula/bt-azure-tools.rb
+        
+        cat Formula/bt-azure-tools.rb
+    
+    - name: Commit and push changes
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add Formula/bt-azure-tools.rb
+        git commit -m "bt-azure-tools ${{ steps.inputs.outputs.version }}"
+        git push

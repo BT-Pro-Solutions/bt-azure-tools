@@ -1,0 +1,55 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>BTAzureTools</RootNamespace>
+        
+        <!-- Assembly Info -->
+        <AssemblyName>bt-azure-tools</AssemblyName>
+        <Product>BTAzureTools</Product>
+        <Description>Azure SQL administration tools for managing Entra ID permissions and more</Description>
+        <Authors>BT Pro Solutions</Authors>
+        <Company>BT Pro Solutions</Company>
+        <Copyright>Copyright © BT Pro Solutions 2024-2026</Copyright>
+        
+        <!-- Versioning - Update these for releases or use CI/CD -->
+        <Version>1.0.0</Version>
+        <AssemblyVersion>1.0.0.0</AssemblyVersion>
+        <FileVersion>1.0.0.0</FileVersion>
+        
+        <!-- Publishing settings for self-contained single-file deployment -->
+        <PublishSingleFile>true</PublishSingleFile>
+        <SelfContained>true</SelfContained>
+        <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+        <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+        
+        <!-- Trimming (optional - reduces binary size but may cause issues with reflection) -->
+        <!-- <PublishTrimmed>true</PublishTrimmed> -->
+        <!-- <TrimMode>link</TrimMode> -->
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- CLI Interaction -->
+        <PackageReference Include="Spectre.Console" Version="0.49.1" />
+        <PackageReference Include="Spectre.Console.Cli" Version="0.49.1" />
+        
+        <!-- Azure Identity & Resource Management -->
+        <PackageReference Include="Azure.Identity" Version="1.13.2" />
+        <PackageReference Include="Azure.ResourceManager" Version="1.13.0" />
+        <PackageReference Include="Azure.ResourceManager.Sql" Version="1.3.0" />
+        
+        <!-- Microsoft Graph for User/Principal Lookup -->
+        <PackageReference Include="Microsoft.Graph" Version="5.70.0" />
+        
+        <!-- SQL Client for Database Operations -->
+        <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
+        
+        <!-- Dependency Injection -->
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.3" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.3" />
+    </ItemGroup>
+
+</Project>
