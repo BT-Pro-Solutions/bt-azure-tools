@@ -1,0 +1,196 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          # macOS ARM64 (Apple Silicon)
+          - os: macos-latest
+            rid: osx-arm64
+            artifact_name: bt-azure-tools-osx-arm64
+          # macOS x64 (Intel)
+          - os: macos-latest
+            rid: osx-x64
+            artifact_name: bt-azure-tools-osx-x64
+          # Linux x64 (for potential future use)
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact_name: bt-azure-tools-linux-x64
+          # Windows x64 (for potential future use)
+          - os: windows-latest
+            rid: win-x64
+            artifact_name: bt-azure-tools-win-x64.exe
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+        dotnet-quality: 'preview'
+    
+    - name: Restore dependencies
+      run: dotnet restore
+    
+    - name: Get version
+      id: version
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Publish self-contained executable
+      run: |
+        dotnet publish BTAzureTools.Console/BTAzureTools.Console.csproj \
+          --configuration Release \
+          --runtime ${{ matrix.rid }} \
+          --self-contained true \
+          -p:PublishSingleFile=true \
+          -p:IncludeNativeLibrariesForSelfExtract=true \
+          -p:EnableCompressionInSingleFile=true \
+          -p:Version=${{ steps.version.outputs.version }} \
+          --output ./publish
+    
+    - name: Rename artifact (Unix)
+      if: runner.os != 'Windows'
+      run: mv ./publish/BTAzureTools.Console ./publish/${{ matrix.artifact_name }}
+    
+    - name: Rename artifact (Windows)
+      if: runner.os == 'Windows'
+      run: mv ./publish/BTAzureTools.Console.exe ./publish/${{ matrix.artifact_name }}
+    
+    - name: Create tarball (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        cd ./publish
+        tar -czvf ${{ matrix.artifact_name }}.tar.gz ${{ matrix.artifact_name }}
+    
+    - name: Create zip (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        cd ./publish
+        Compress-Archive -Path ${{ matrix.artifact_name }} -DestinationPath ${{ matrix.artifact_name }}.zip
+    
+    - name: Upload build artifact (Unix)
+      if: runner.os != 'Windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: ./publish/${{ matrix.artifact_name }}.tar.gz
+        retention-days: 1
+    
+    - name: Upload build artifact (Windows)
+      if: runner.os == 'Windows'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: ./publish/${{ matrix.artifact_name }}.zip
+        retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          echo "tag=v${{ inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+    
+    - name: Display structure of downloaded files
+      run: ls -R ./artifacts
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.tag }}
+        name: BTAzureTools v${{ steps.version.outputs.version }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        files: |
+          ./artifacts/**/*.tar.gz
+          ./artifacts/**/*.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    # Only run if we have a homebrew tap repository set up
+    # You'll need to create a repository named 'homebrew-tap' and add HOMEBREW_TAP_TOKEN secret
+    if: vars.HOMEBREW_TAP_REPO != ''
+    
+    steps:
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Download macOS artifacts for SHA256
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+    
+    - name: Calculate SHA256
+      id: sha256
+      run: |
+        ARM64_SHA=$(sha256sum ./artifacts/bt-azure-tools-osx-arm64/bt-azure-tools-osx-arm64.tar.gz | cut -d ' ' -f 1)
+        X64_SHA=$(sha256sum ./artifacts/bt-azure-tools-osx-x64/bt-azure-tools-osx-x64.tar.gz | cut -d ' ' -f 1)
+        echo "arm64_sha=$ARM64_SHA" >> $GITHUB_OUTPUT
+        echo "x64_sha=$X64_SHA" >> $GITHUB_OUTPUT
+    
+    - name: Trigger Homebrew tap update
+      uses: peter-evans/repository-dispatch@v3
+      with:
+        token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        repository: ${{ vars.HOMEBREW_TAP_REPO }}
+        event-type: update-formula
+        client-payload: |
+          {
+            "version": "${{ steps.version.outputs.version }}",
+            "arm64_sha256": "${{ steps.sha256.outputs.arm64_sha }}",
+            "x64_sha256": "${{ steps.sha256.outputs.x64_sha }}"
+          }
