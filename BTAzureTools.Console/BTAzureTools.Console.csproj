@@ -23,8 +23,10 @@
         <!-- Publishing settings for self-contained single-file deployment -->
         <PublishSingleFile>true</PublishSingleFile>
         <SelfContained>true</SelfContained>
-        <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+        <!-- Compression disabled to prevent AccessViolationException with Azure SDK native dependencies -->
+        <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
         <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+        <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
         
         <!-- Trimming (optional - reduces binary size but may cause issues with reflection) -->
         <!-- <PublishTrimmed>true</PublishTrimmed> -->

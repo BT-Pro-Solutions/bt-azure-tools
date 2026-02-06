@@ -27,6 +27,15 @@ public sealed class AzurePrompter
     }
     
     /// <summary>
+    /// Wrapper for selection prompts that includes a cancel option.
+    /// </summary>
+    private sealed record SelectionChoice<T>(T? Value, bool IsCancel = false)
+    {
+        public static SelectionChoice<T> Cancel => new(default, true);
+        public static SelectionChoice<T> FromValue(T value) => new(value, false);
+    }
+    
+    /// <summary>
     /// Prompts the user to select a tenant.
     /// </summary>
     public async Task<TenantInfo> SelectTenantAsync(
@@ -49,13 +58,23 @@ public sealed class AzurePrompter
             return tenants[0];
         }
         
-        return console.Prompt(
-            new SelectionPrompt<TenantInfo>()
+        var choices = tenants.Select(SelectionChoice<TenantInfo>.FromValue).ToList();
+        choices.Add(SelectionChoice<TenantInfo>.Cancel);
+        
+        var selected = console.Prompt(
+            new SelectionPrompt<SelectionChoice<TenantInfo>>()
                 .Title("[bold blue]Select a tenant:[/]")
                 .PageSize(15)
                 .MoreChoicesText("[grey](Move up and down to reveal more tenants)[/]")
-                .UseConverter(t => t.ToString())
-                .AddChoices(tenants));
+                .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : c.Value!.ToString())
+                .AddChoices(choices));
+        
+        if (selected.IsCancel)
+        {
+            throw new OperationCanceledException("Tenant selection cancelled.");
+        }
+        
+        return selected.Value!;
     }
     
     /// <summary>
@@ -82,13 +101,23 @@ public sealed class AzurePrompter
             return subscriptions[0];
         }
         
-        return console.Prompt(
-            new SelectionPrompt<SubscriptionInfo>()
+        var choices = subscriptions.Select(SelectionChoice<SubscriptionInfo>.FromValue).ToList();
+        choices.Add(SelectionChoice<SubscriptionInfo>.Cancel);
+        
+        var selected = console.Prompt(
+            new SelectionPrompt<SelectionChoice<SubscriptionInfo>>()
                 .Title("[bold blue]Select a subscription:[/]")
                 .PageSize(15)
                 .MoreChoicesText("[grey](Move up and down to reveal more subscriptions)[/]")
-                .UseConverter(s => s.ToString())
-                .AddChoices(subscriptions));
+                .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : c.Value!.ToString())
+                .AddChoices(choices));
+        
+        if (selected.IsCancel)
+        {
+            throw new OperationCanceledException("Subscription selection cancelled.");
+        }
+        
+        return selected.Value!;
     }
     
     /// <summary>
@@ -128,13 +157,23 @@ public sealed class AzurePrompter
             }
         }
         
-        return console.Prompt(
-            new SelectionPrompt<SqlServerInfo>()
+        var choices = servers.Select(SelectionChoice<SqlServerInfo>.FromValue).ToList();
+        choices.Add(SelectionChoice<SqlServerInfo>.Cancel);
+        
+        var selected = console.Prompt(
+            new SelectionPrompt<SelectionChoice<SqlServerInfo>>()
                 .Title("[bold blue]Select a SQL server:[/]")
                 .PageSize(15)
                 .MoreChoicesText("[grey](Move up and down to reveal more servers)[/]")
-                .UseConverter(s => s.ToString())
-                .AddChoices(servers));
+                .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : c.Value!.ToString())
+                .AddChoices(choices));
+        
+        if (selected.IsCancel)
+        {
+            throw new OperationCanceledException("SQL server selection cancelled.");
+        }
+        
+        return selected.Value!;
     }
     
     /// <summary>
@@ -161,13 +200,23 @@ public sealed class AzurePrompter
             return databases[0];
         }
         
-        return console.Prompt(
-            new SelectionPrompt<SqlDatabaseInfo>()
+        var choices = databases.Select(SelectionChoice<SqlDatabaseInfo>.FromValue).ToList();
+        choices.Add(SelectionChoice<SqlDatabaseInfo>.Cancel);
+        
+        var selected = console.Prompt(
+            new SelectionPrompt<SelectionChoice<SqlDatabaseInfo>>()
                 .Title("[bold blue]Select a database:[/]")
                 .PageSize(15)
                 .MoreChoicesText("[grey](Move up and down to reveal more databases)[/]")
-                .UseConverter(d => d.Name)
-                .AddChoices(databases));
+                .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : c.Value!.Name)
+                .AddChoices(choices));
+        
+        if (selected.IsCancel)
+        {
+            throw new OperationCanceledException("Database selection cancelled.");
+        }
+        
+        return selected.Value!;
     }
     
     /// <summary>
@@ -180,7 +229,12 @@ public sealed class AzurePrompter
         var searchType = console.Prompt(
             new SelectionPrompt<string>()
                 .Title("[bold blue]What type of principal do you want to add?[/]")
-                .AddChoices("User (by email)", "Managed Identity / App (by name)"));
+                .AddChoices("User (by email)", "Managed Identity / App (by name)", "[grey]← Cancel[/]"));
+        
+        if (searchType.Contains("Cancel"))
+        {
+            throw new OperationCanceledException("Principal selection cancelled.");
+        }
         
         if (searchType.StartsWith("User"))
         {
@@ -232,12 +286,22 @@ public sealed class AzurePrompter
                 continue;
             }
             
-            return console.Prompt(
-                new SelectionPrompt<PrincipalInfo>()
+            var choices = users.Select(SelectionChoice<PrincipalInfo>.FromValue).ToList();
+            choices.Add(SelectionChoice<PrincipalInfo>.Cancel);
+            
+            var selected = console.Prompt(
+                new SelectionPrompt<SelectionChoice<PrincipalInfo>>()
                     .Title("[bold blue]Select a user:[/]")
                     .PageSize(15)
-                    .UseConverter(p => p.ToString())
-                    .AddChoices(users));
+                    .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : c.Value!.ToString())
+                    .AddChoices(choices));
+            
+            if (selected.IsCancel)
+            {
+                throw new OperationCanceledException("User selection cancelled.");
+            }
+            
+            return selected.Value!;
         }
     }
     
@@ -281,12 +345,22 @@ public sealed class AzurePrompter
                 continue;
             }
             
-            return console.Prompt(
-                new SelectionPrompt<PrincipalInfo>()
+            var choices = principals.Select(SelectionChoice<PrincipalInfo>.FromValue).ToList();
+            choices.Add(SelectionChoice<PrincipalInfo>.Cancel);
+            
+            var selected = console.Prompt(
+                new SelectionPrompt<SelectionChoice<PrincipalInfo>>()
                     .Title("[bold blue]Select a service principal:[/]")
                     .PageSize(15)
-                    .UseConverter(p => p.ToString())
-                    .AddChoices(principals));
+                    .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : c.Value!.ToString())
+                    .AddChoices(choices));
+            
+            if (selected.IsCancel)
+            {
+                throw new OperationCanceledException("Principal selection cancelled.");
+            }
+            
+            return selected.Value!;
         }
     }
     
@@ -296,11 +370,20 @@ public sealed class AzurePrompter
     public PermissionLevel SelectPermissionLevel(IAnsiConsole console)
     {
         var levels = Enum.GetValues<PermissionLevel>();
+        var choices = levels.Select(SelectionChoice<PermissionLevel>.FromValue).ToList();
+        choices.Add(SelectionChoice<PermissionLevel>.Cancel);
         
-        return console.Prompt(
-            new SelectionPrompt<PermissionLevel>()
+        var selected = console.Prompt(
+            new SelectionPrompt<SelectionChoice<PermissionLevel>>()
                 .Title("[bold blue]Select the desired permission level:[/]")
-                .UseConverter(l => l.GetDescription())
-                .AddChoices(levels));
+                .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : c.Value.GetDescription())
+                .AddChoices(choices));
+        
+        if (selected.IsCancel)
+        {
+            throw new OperationCanceledException("Permission level selection cancelled.");
+        }
+        
+        return selected.Value;
     }
 }

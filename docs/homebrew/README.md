@@ -44,6 +44,9 @@ If you prefer manual releases:
      --runtime osx-arm64 \
      --self-contained true \
      -p:PublishSingleFile=true \
+     -p:IncludeNativeLibrariesForSelfExtract=true \
+     -p:IncludeAllContentForSelfExtract=true \
+     -p:EnableCompressionInSingleFile=false \
      --output ./publish
    ```
 
