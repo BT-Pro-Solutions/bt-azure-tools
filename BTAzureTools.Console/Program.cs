@@ -3,6 +3,7 @@ using BTAzureTools.Core.Abstractions;
 using BTAzureTools.Infrastructure.AzureInfra;
 using BTAzureTools.Infrastructure.Graph;
 using BTAzureTools.Infrastructure.Sql;
+using BTAzureTools.Tools.ResourceIam;
 using BTAzureTools.Tools.SqlEntraPermissions;
 using BTAzureTools.Tools.SqlFirewall;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +22,7 @@ services.AddTransient<ISqlServerService, AzureSqlServerService>();
 services.AddTransient<ISqlAdminService, AzureSqlAdminService>();
 services.AddSingleton<HttpClient>();
 services.AddTransient<ISqlFirewallService, AzureSqlFirewallService>();
+services.AddTransient<IResourceIamService, AzureResourceIamService>();
 
 // Register Graph services
 services.AddTransient<IPrincipalLookupService, GraphPrincipalLookupService>();
@@ -37,6 +39,7 @@ services.AddTransient<ToolMenu>();
 // Register tools
 services.AddTransient<SqlEntraPermissionsTool>();
 services.AddTransient<SqlFirewallTool>();
+services.AddTransient<ResourceIamTool>();
 
 var serviceProvider = services.BuildServiceProvider();
 
@@ -44,6 +47,7 @@ var serviceProvider = services.BuildServiceProvider();
 var toolRegistry = serviceProvider.GetRequiredService<IToolRegistry>();
 toolRegistry.Register<SqlEntraPermissionsTool>();
 toolRegistry.Register<SqlFirewallTool>();
+toolRegistry.Register<ResourceIamTool>();
 
 // Run the tool menu
 var console = AnsiConsole.Console;

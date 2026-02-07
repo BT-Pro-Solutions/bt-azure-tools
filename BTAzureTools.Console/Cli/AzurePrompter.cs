@@ -66,7 +66,7 @@ public sealed class AzurePrompter
                 .Title("[bold blue]Select a tenant:[/]")
                 .PageSize(15)
                 .MoreChoicesText("[grey](Move up and down to reveal more tenants)[/]")
-                .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : c.Value!.ToString())
+                .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : Markup.Escape(c.Value!.ToString()))
                 .AddChoices(choices));
         
         if (selected.IsCancel)
@@ -109,7 +109,7 @@ public sealed class AzurePrompter
                 .Title("[bold blue]Select a subscription:[/]")
                 .PageSize(15)
                 .MoreChoicesText("[grey](Move up and down to reveal more subscriptions)[/]")
-                .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : c.Value!.ToString())
+                .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : Markup.Escape(c.Value!.ToString()))
                 .AddChoices(choices));
         
         if (selected.IsCancel)
@@ -304,7 +304,7 @@ public sealed class AzurePrompter
                 new SelectionPrompt<SelectionChoice<PrincipalInfo>>()
                     .Title("[bold blue]Select a user:[/]")
                     .PageSize(15)
-                    .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : c.Value!.ToString())
+                    .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : Markup.Escape(c.Value!.ToString()))
                     .AddChoices(choices));
             
             if (selected.IsCancel)
@@ -363,7 +363,7 @@ public sealed class AzurePrompter
                 new SelectionPrompt<SelectionChoice<PrincipalInfo>>()
                     .Title("[bold blue]Select a service principal:[/]")
                     .PageSize(15)
-                    .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : c.Value!.ToString())
+                    .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : Markup.Escape(c.Value!.ToString()))
                     .AddChoices(choices));
             
             if (selected.IsCancel)
