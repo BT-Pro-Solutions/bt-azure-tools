@@ -38,24 +38,24 @@ public sealed class GraphPrincipalLookupService : IPrincipalLookupService
         var users = await client.Users.GetAsync(rc =>
         {
             rc.QueryParameters.Filter = $"startswith(displayName,'{EscapeOData(searchTerm)}') or startswith(mail,'{EscapeOData(searchTerm)}') or startswith(userPrincipalName,'{EscapeOData(searchTerm)}')";
-            rc.QueryParameters.Select = ["id", "displayName", "userPrincipalName", "mail"];
+            rc.QueryParameters.Select = ["id", "displayName", "userPrincipalName", "mail", "userType"];
             rc.QueryParameters.Top = 20;
         }, cancellationToken);
         
         var results = new List<PrincipalInfo>();
+        var normalizedSearchTerm = NormalizeEmail(searchTerm) ?? string.Empty;
         
         if (users?.Value is not null)
         {
-            foreach (var user in users.Value)
+            foreach (var user in users.Value
+                .Where(u => u.Id is not null)
+                .OrderByDescending(u => string.Equals(NormalizeEmail(u.UserPrincipalName), normalizedSearchTerm, StringComparison.Ordinal))
+                .ThenByDescending(u => string.Equals(NormalizeEmail(u.Mail), normalizedSearchTerm, StringComparison.Ordinal))
+                .ThenByDescending(u => string.Equals(NormalizeEmail(TryDecodeGuestUpnToExternalEmail(u.UserPrincipalName)), normalizedSearchTerm, StringComparison.Ordinal))
+                .ThenBy(u => IsGuestUser(u))
+                .ThenBy(u => u.DisplayName, StringComparer.OrdinalIgnoreCase))
             {
-                if (user.Id is not null)
-                {
-                    results.Add(new PrincipalInfo(
-                        Guid.Parse(user.Id),
-                        user.DisplayName ?? "Unknown",
-                        PrincipalType.User,
-                        user.UserPrincipalName ?? user.Mail));
-                }
+                results.Add(ToPrincipalInfo(user));
             }
         }
         
@@ -70,22 +70,19 @@ public sealed class GraphPrincipalLookupService : IPrincipalLookupService
             return null;
         
         var client = GetGraphClient();
+        var normalizedEmail = NormalizeEmail(email) ?? string.Empty;
         
         try
         {
             // Try by UPN first
             var user = await client.Users[email].GetAsync(rc =>
             {
-                rc.QueryParameters.Select = ["id", "displayName", "userPrincipalName", "mail"];
+                rc.QueryParameters.Select = ["id", "displayName", "userPrincipalName", "mail", "userType"];
             }, cancellationToken);
             
-            if (user?.Id is not null)
+            if (user?.Id is not null && IsExactUserEmailMatch(user, normalizedEmail))
             {
-                return new PrincipalInfo(
-                    Guid.Parse(user.Id),
-                    user.DisplayName ?? "Unknown",
-                    PrincipalType.User,
-                    user.UserPrincipalName ?? user.Mail);
+                return ToPrincipalInfo(user);
             }
         }
         catch (Microsoft.Graph.Models.ODataErrors.ODataError ex) when (ex.ResponseStatusCode == 404)
@@ -93,21 +90,41 @@ public sealed class GraphPrincipalLookupService : IPrincipalLookupService
             // User not found by UPN, try by mail
         }
         
-        // Try by mail filter
+        // Try by exact UPN/mail filter, but avoid auto-selecting guest users for mail-only matches.
         var users = await client.Users.GetAsync(rc =>
         {
-            rc.QueryParameters.Filter = $"mail eq '{EscapeOData(email)}'";
-            rc.QueryParameters.Select = ["id", "displayName", "userPrincipalName", "mail"];
+            rc.QueryParameters.Filter = $"userPrincipalName eq '{EscapeOData(email)}' or mail eq '{EscapeOData(email)}'";
+            rc.QueryParameters.Select = ["id", "displayName", "userPrincipalName", "mail", "userType"];
+            rc.QueryParameters.Top = 10;
         }, cancellationToken);
         
-        var foundUser = users?.Value?.FirstOrDefault();
-        if (foundUser?.Id is not null)
+        var candidates = users?.Value?.Where(u => u.Id is not null).ToList();
+        if (candidates is null || candidates.Count == 0)
         {
-            return new PrincipalInfo(
-                Guid.Parse(foundUser.Id),
-                foundUser.DisplayName ?? "Unknown",
-                PrincipalType.User,
-                foundUser.UserPrincipalName ?? foundUser.Mail);
+            return null;
+        }
+
+        var exactUpnMatch = candidates.FirstOrDefault(u =>
+            string.Equals(NormalizeEmail(u.UserPrincipalName), normalizedEmail, StringComparison.Ordinal));
+        if (exactUpnMatch is not null)
+        {
+            return ToPrincipalInfo(exactUpnMatch);
+        }
+
+        var exactMailMemberMatch = candidates.FirstOrDefault(u =>
+            string.Equals(NormalizeEmail(u.Mail), normalizedEmail, StringComparison.Ordinal) &&
+            !IsGuestUser(u));
+        if (exactMailMemberMatch is not null)
+        {
+            return ToPrincipalInfo(exactMailMemberMatch);
+        }
+
+        // If caller entered an external email in a B2B tenant, map to matching #EXT# guest UPN.
+        var exactGuestAliasMatch = candidates.FirstOrDefault(u =>
+            string.Equals(NormalizeEmail(TryDecodeGuestUpnToExternalEmail(u.UserPrincipalName)), normalizedEmail, StringComparison.Ordinal));
+        if (exactGuestAliasMatch is not null)
+        {
+            return ToPrincipalInfo(exactGuestAliasMatch);
         }
         
         return null;
@@ -240,5 +257,66 @@ public sealed class GraphPrincipalLookupService : IPrincipalLookupService
     {
         // Escape single quotes for OData filter
         return value.Replace("'", "''");
+    }
+
+    private static PrincipalInfo ToPrincipalInfo(User user)
+    {
+        return new PrincipalInfo(
+            Guid.Parse(user.Id!),
+            user.DisplayName ?? "Unknown",
+            PrincipalType.User,
+            user.UserPrincipalName ?? user.Mail);
+    }
+
+    private static bool IsExactUserEmailMatch(User user, string normalizedEmail)
+    {
+        if (string.Equals(NormalizeEmail(user.UserPrincipalName), normalizedEmail, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // For member users with non-UPN email sign-in patterns, allow exact mail match.
+        return !IsGuestUser(user) &&
+               string.Equals(NormalizeEmail(user.Mail), normalizedEmail, StringComparison.Ordinal);
+    }
+
+    private static bool IsGuestUser(User user)
+    {
+        if (string.Equals(user.UserType, "Guest", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return user.UserPrincipalName?.Contains("#EXT#", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private static string? NormalizeEmail(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToLowerInvariant();
+    }
+
+    private static string? TryDecodeGuestUpnToExternalEmail(string? userPrincipalName)
+    {
+        if (string.IsNullOrWhiteSpace(userPrincipalName))
+        {
+            return null;
+        }
+
+        var extIndex = userPrincipalName.IndexOf("#EXT#", StringComparison.OrdinalIgnoreCase);
+        if (extIndex <= 0)
+        {
+            return null;
+        }
+
+        var encoded = userPrincipalName[..extIndex];
+        var underscoreIndex = encoded.LastIndexOf('_');
+        if (underscoreIndex <= 0 || underscoreIndex >= encoded.Length - 1)
+        {
+            return null;
+        }
+
+        // Guest UPN convention encodes external email as local_part + "_" + domain.
+        var decoded = $"{encoded[..underscoreIndex]}@{encoded[(underscoreIndex + 1)..]}";
+        return decoded;
     }
 }

@@ -165,7 +165,7 @@ public sealed class AzurePrompter
                 .Title("[bold blue]Select a SQL server:[/]")
                 .PageSize(15)
                 .MoreChoicesText("[grey](Move up and down to reveal more servers)[/]")
-                .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : c.Value!.ToString())
+                .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : FormatServerChoice(c.Value!))
                 .AddChoices(choices));
         
         if (selected.IsCancel)
@@ -196,7 +196,8 @@ public sealed class AzurePrompter
         
         if (databases.Count == 1)
         {
-            console.MarkupLine($"[grey]Using database:[/] [blue]{databases[0].Name}[/]");
+            console.MarkupLine(
+                $"[grey]Using database:[/] [blue]{Markup.Escape(databases[0].Name)}[/] [grey](RG: {Markup.Escape(databases[0].Server.ResourceGroupName)})[/]");
             return databases[0];
         }
         
@@ -208,7 +209,7 @@ public sealed class AzurePrompter
                 .Title("[bold blue]Select a database:[/]")
                 .PageSize(15)
                 .MoreChoicesText("[grey](Move up and down to reveal more databases)[/]")
-                .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : c.Value!.Name)
+                .UseConverter(c => c.IsCancel ? "[grey]← Cancel[/]" : FormatDatabaseChoice(c.Value!))
                 .AddChoices(choices));
         
         if (selected.IsCancel)
@@ -263,11 +264,21 @@ public sealed class AzurePrompter
             if (user is not null)
             {
                 console.MarkupLine($"[green]Found:[/] {Markup.Escape(user.ToString())}");
+
+                if (TryDecodeGuestUpnToExternalEmail(user.UserPrincipalName) is { } externalEmail &&
+                    string.Equals(externalEmail, email.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    console.MarkupLine("[grey]Matched guest user from external email input.[/]");
+                }
                 
                 if (console.Confirm("Use this user?", true))
                 {
                     return user;
                 }
+            }
+            else
+            {
+                console.MarkupLine("[grey]No exact UPN/email match found. Showing closest results (guest users may have different sign-in names).[/]");
             }
             
             // Search if not found or not confirmed
@@ -385,5 +396,38 @@ public sealed class AzurePrompter
         }
         
         return selected.Value;
+    }
+
+    private static string? TryDecodeGuestUpnToExternalEmail(string? userPrincipalName)
+    {
+        if (string.IsNullOrWhiteSpace(userPrincipalName))
+        {
+            return null;
+        }
+
+        var extIndex = userPrincipalName.IndexOf("#EXT#", StringComparison.OrdinalIgnoreCase);
+        if (extIndex <= 0)
+        {
+            return null;
+        }
+
+        var encoded = userPrincipalName[..extIndex];
+        var underscoreIndex = encoded.LastIndexOf('_');
+        if (underscoreIndex <= 0 || underscoreIndex >= encoded.Length - 1)
+        {
+            return null;
+        }
+
+        return $"{encoded[..underscoreIndex]}@{encoded[(underscoreIndex + 1)..]}";
+    }
+
+    private static string FormatServerChoice(SqlServerInfo server)
+    {
+        return $"{Markup.Escape(server.Name)} [grey](RG: {Markup.Escape(server.ResourceGroupName)} | {Markup.Escape(server.FullyQualifiedDomainName)})[/]";
+    }
+
+    private static string FormatDatabaseChoice(SqlDatabaseInfo database)
+    {
+        return $"{Markup.Escape(database.Name)} [grey](RG: {Markup.Escape(database.Server.ResourceGroupName)} | Server: {Markup.Escape(database.Server.Name)})[/]";
     }
 }
